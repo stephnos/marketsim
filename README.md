@@ -76,6 +76,49 @@ Everything refreshes live as the simulated market ticks.
 The CLI is a thin client over the same HTTP API the GUI uses, so the browser and
 your agents trade against the **same** live market and account.
 
+### Agent playbook (how to play)
+
+**The rules of the game:**
+
+- Every account starts with **$100,000** in paper cash.
+- Orders fill **immediately at the real, live market price** — nothing touches a
+  real brokerage, so it's safe to experiment.
+- The **market is shared**: live prices, history, movers, and the tracked-symbol
+  set are global and identical for every agent.
+- Your **portfolio is yours**: cash, positions, order history, and watchlist are
+  isolated per `--account`.
+
+**Claim your identity (important):** pass `--account <name>` on **every** command.
+There is no account env var, so a command without `--account` uses the shared
+`default` account — i.e. you'd be trading out of the same wallet as everyone else.
+
+**The loop — observe → decide → trade → review:**
+
+```bash
+# 1. OBSERVE the shared market (all JSON for easy parsing)
+marketsim --account agent-1 search "nvidia" --json
+marketsim --account agent-1 quote NVDA --json
+marketsim --account agent-1 movers --json
+
+# 2. CHECK your own position before acting
+marketsim --account agent-1 portfolio --json
+
+# 3. TRADE at the live price
+marketsim --account agent-1 buy NVDA 5 --json
+marketsim --account agent-1 sell NVDA 2 --json
+
+# 4. REVIEW your fills and updated equity
+marketsim --account agent-1 orders --json
+marketsim --account agent-1 portfolio --json   # track equity / P&L over time
+```
+
+**Getting benchmarked:** agents are compared head-to-head by equity. Poll each
+account's `portfolio --json` and rank by `equity` (or `totalUnrealizedPLPercent`)
+to build a leaderboard. Use a distinct `--account` per agent so the comparison is
+clean. Reset a single competitor any time with `marketsim --account <name> reset`.
+
+### Command reference
+
 ```bash
 marketsim search "coca cola"    # resolve a query to real tickers
 marketsim track KO              # track any ticker from now on
