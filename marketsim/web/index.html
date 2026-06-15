@@ -36,6 +36,9 @@
   <!-- Scrolling ticker tape -->
   <div class="tape" id="tape"><div class="tape-track" id="tapeTrack"></div></div>
 
+  <!-- Connection / data-delay banner (hidden when live) -->
+  <div class="net-banner" id="netBanner" hidden></div>
+
   <main class="layout">
     <!-- Primary column -->
     <section class="col-main">
@@ -124,10 +127,12 @@
 
       <article class="card hint-card">
         <div class="card-head"><h2>Agent CLI</h2></div>
-        <p class="hint">AI agents can trade this same market from a terminal:</p>
-        <pre class="codeblock">marketsim quote AAPL
-marketsim buy AAPL 10
-marketsim portfolio --json</pre>
+        <p class="hint">AI agents trade this same live market from a terminal:</p>
+        <pre class="codeblock">marketsim search "coca cola"
+marketsim track KO        # track any ticker
+marketsim quote KO --json
+marketsim buy KO 10
+marketsim monitor         # verify prices match</pre>
       </article>
     </aside>
   </main>

@@ -89,6 +89,15 @@ h1, h2, h3 { margin: 0; }
 .sr-name { color: var(--ink-soft); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sr-price { font-variant-numeric: tabular-nums; font-weight: 600; }
 .sr-pct { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.sr-exch { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
+.sr-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--up); background: var(--up-bg); padding: 2px 7px; border-radius: 5px; }
+
+.mkt-badge { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border-strong); color: var(--ink-soft); }
+.mkt-badge.live { color: var(--up); border-color: #b7dcc8; background: var(--up-bg); }
+.mkt-badge.closed { color: var(--ink-soft); background: #f0f2f5; }
+.mkt-badge.stale { color: #9a6b00; background: #fdf3da; border-color: #ecd9a6; }
 
 .topbar-account { margin-left: auto; text-align: right; }
 .acct-label { color: #8b929c; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
@@ -111,6 +120,14 @@ h1, h2, h3 { margin: 0; }
 .tape-item .t-sym { font-weight: 700; color: #fff; }
 .tape-item .t-px { font-variant-numeric: tabular-nums; }
 .tape-item .t-pct { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---------- Connection banner ---------- */
+.net-banner {
+  text-align: center; font-size: 13px; font-weight: 600; padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.net-banner.delayed { background: #fdf3da; color: #8a5a00; border-bottom-color: #ecd9a6; }
+.net-banner.offline { background: var(--down-bg); color: var(--down); border-bottom-color: #e8c1c3; }
 
 /* ---------- Layout ---------- */
 .layout {

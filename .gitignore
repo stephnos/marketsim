@@ -7,3 +7,6 @@ build/
 dist/
 .marketsim/
 .DS_Store
+.env
+.env.*
+!.env.example

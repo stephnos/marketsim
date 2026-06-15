@@ -117,23 +117,103 @@ def emit_json(obj) -> None:
 
 # ---- commands -------------------------------------------------------------
 
+def _maybe_usd(v):
+    return usd(v) if isinstance(v, (int, float)) else "—"
+
+
 def cmd_quote(args):
     q = get(args.base, f"/api/quote/{args.symbol}")
     if args.json:
         return emit_json(q)
     arrow = "▲" if q["change"] >= 0 else "▼"
     line = f"{q['change']:+.2f} ({pct(q['changePercent'])})"
-    print(f"\n{c(q['symbol'], BOLD)}  {q['name']}  {c(q['sector'], DIM)}")
+    sector = q.get("sector") or q.get("exchange") or ""
+    flags = []
+    if q.get("marketState"):
+        flags.append(q["marketState"])
+    if q.get("stale"):
+        flags.append(c("STALE", RED))
+    flag_str = ("   " + " · ".join(flags)) if flags else ""
+    print(f"\n{c(q['symbol'], BOLD)}  {q.get('name', '')}  {c(sector, DIM)}{flag_str}")
     print(f"{c(usd(q['price']), BOLD)}   {color_num(q['change'], arrow + ' ' + line)}\n")
     rows = [
-        ("Open", usd(q["open"]), "Prev Close", usd(q["prevClose"])),
-        ("Day Low", usd(q["dayLow"]), "Day High", usd(q["dayHigh"])),
-        ("52W Low", usd(q["yearLow"]), "52W High", usd(q["yearHigh"])),
-        ("Volume", f"{q['volume']:,}", "Mkt Cap", usd(q["marketCap"], 0)),
+        ("Open", _maybe_usd(q.get("open")), "Prev Close", _maybe_usd(q.get("prevClose"))),
+        ("Day Low", _maybe_usd(q.get("dayLow")), "Day High", _maybe_usd(q.get("dayHigh"))),
+        ("52W Low", _maybe_usd(q.get("yearLow")), "52W High", _maybe_usd(q.get("yearHigh"))),
+        ("Volume", f"{q.get('volume', 0):,}", "Exchange", q.get("exchange") or "—"),
     ]
     for a, b, cc, d in rows:
         print(f"  {c(a + ':', DIM):<22} {b:<16}  {c(cc + ':', DIM):<22} {d}")
     print()
+
+
+def cmd_track(args):
+    q = post(args.base, "/api/track", {"symbol": args.symbol})
+    if args.json:
+        return emit_json(q)
+    print(c(f"\n✓ Tracking {q['symbol']} — {q.get('name', '')} "
+            f"({q.get('exchange', '')})  {usd(q['price'])}\n", GREEN))
+
+
+def cmd_tracked(args):
+    items = get(args.base, "/api/tracked")
+    if args.json:
+        return emit_json(items)
+    print(f"\nTracking {len(items)} symbols:")
+    for t in items:
+        print(f"  {c(t['symbol'], BOLD):<10} {t.get('name', '')[:40]:<42} {c(t.get('exchange', ''), DIM)}")
+    print()
+
+
+def cmd_monitor(args):
+    from dataclasses import asdict
+
+    from .monitor import http_monitor
+
+    mon = http_monitor(args.base, tolerance_pct=args.tolerance, interval=args.interval)
+    if args.json and args.once:
+        mon.check_once()
+        return emit_json(mon.summary())
+    if args.once:
+        results = [asdict(r) for r in mon.check_once()]
+        _print_monitor_results(results)
+        _print_monitor_summary(mon.summary())
+        return
+    print(c(f"Price monitor — verifying {args.base} against fresh scrapes "
+            f"(tolerance {args.tolerance:.2f}%, every {args.interval:.0f}s). Ctrl-C to stop.\n", BOLD))
+    try:
+        while True:
+            results = [asdict(r) for r in mon.check_once()]
+            _print_monitor_results(results)
+            s = mon.summary()
+            print(c(f"  → checks {s['counts']['checks']}  ok {s['counts']['ok']}  "
+                    f"mismatch {s['counts']['mismatch']}  stale {s['counts']['stale']}  "
+                    f"error {s['counts']['error']}  pass-rate {s['passRate']}%\n", DIM))
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print("\nstopped.")
+
+
+def _print_monitor_results(results):
+    icons = {"ok": c("✓", GREEN), "mismatch": c("✗", RED),
+             "stale": c("~", "33"), "error": c("!", RED)}
+    for r in results:
+        served = usd(r["served"]) if r["served"] is not None else "—"
+        truth = usd(r["truth"]) if r["truth"] is not None else "—"
+        extra = ""
+        if r["status"] == "ok" and r["diffPercent"] is not None:
+            extra = c(f"Δ{r['diffPercent']:.2f}%", DIM)
+        elif r["detail"]:
+            extra = r["detail"]
+        print(f"  {icons.get(r['status'], '?')} {r['symbol']:<8} "
+              f"served {served:<11} truth {truth:<11} {extra}")
+
+
+def _print_monitor_summary(s):
+    print(c(f"\n  pass-rate {s['passRate']}%  "
+            f"(ok {s['counts']['ok']} / checks {s['counts']['checks']}, "
+            f"mismatch {s['counts']['mismatch']}, stale {s['counts']['stale']}, "
+            f"error {s['counts']['error']})\n", DIM))
 
 
 def cmd_search(args):
@@ -145,8 +225,9 @@ def cmd_search(args):
         return
     print()
     for r in results:
-        print(f"  {c(r['symbol'], BOLD):<10} {r['name'][:34]:<36} "
-              f"{usd(r['price']):>10}  {color_num(r['changePercent'], pct(r['changePercent']))}")
+        tag = c("  ✓ tracked", GREEN) if r.get("tracked") else ""
+        print(f"  {c(r['symbol'], BOLD):<10} {(r.get('name') or '')[:34]:<36} "
+              f"{c((r.get('exchange') or ''), DIM):<12}{tag}")
     print()
 
 
@@ -317,6 +398,19 @@ def build_parser() -> argparse.ArgumentParser:
     s = add("search", help="search tickers / companies")
     s.add_argument("query")
     s.set_defaults(func=cmd_search)
+
+    s = add("track", help="track any real ticker from now on")
+    s.add_argument("symbol")
+    s.set_defaults(func=cmd_track)
+
+    s = add("tracked", help="list tracked symbols")
+    s.set_defaults(func=cmd_tracked)
+
+    s = add("monitor", help="continuously verify served prices vs fresh scrapes")
+    s.add_argument("--tolerance", type=float, default=1.0, help="match tolerance %% (default 1.0)")
+    s.add_argument("--interval", type=float, default=60.0, help="seconds between cycles")
+    s.add_argument("--once", action="store_true", help="run a single check cycle and exit")
+    s.set_defaults(func=cmd_monitor)
 
     s = add("chart", help="ascii price chart")
     s.add_argument("symbol")

@@ -198,27 +198,33 @@ class AreaChart {
 let chart;
 
 // ---- rendering ------------------------------------------------------------
+const money = (v) => (typeof v === "number" ? fmtUSD(v) : "—");
+const range2 = (lo, hi) =>
+  typeof lo === "number" && typeof hi === "number" ? `${fmtUSD(lo)} – ${fmtUSD(hi)}` : "—";
+
 function renderQuote() {
   const q = state.quote;
   if (!q) return;
   $("qSymbol").textContent = q.symbol;
-  $("qName").textContent = q.name;
-  $("qSector").textContent = q.sector;
+  $("qName").textContent = q.name || "";
+  $("qSector").textContent = q.sector || q.exchange || "";
   $("qPrice").textContent = fmtUSD(q.price);
   const c = $("qChange");
   c.className = "quote-change " + cls(q.change);
   c.textContent = `${fmtSigned(q.change)} (${fmtPct(q.changePercent)})`;
-  $("qAsOf").textContent = "Simulated · live";
+
+  const badge = badgeFor(q);
+  $("qAsOf").innerHTML = badge;
   document.title = `${q.symbol} ${fmtUSD(q.price)} — MarketSim`;
 
   const stats = [
-    ["Open", fmtUSD(q.open)],
-    ["Prev Close", fmtUSD(q.prevClose)],
-    ["Day Range", `${fmtUSD(q.dayLow)} – ${fmtUSD(q.dayHigh)}`],
-    ["52W Range", `${fmtUSD(q.yearLow)} – ${fmtUSD(q.yearHigh)}`],
-    ["Volume", fmtVol(q.volume)],
-    ["Market Cap", fmtCap(q.marketCap)],
-    ["Sector", q.sector],
+    ["Open", money(q.open)],
+    ["Prev Close", money(q.prevClose)],
+    ["Day Range", range2(q.dayLow, q.dayHigh)],
+    ["52W Range", range2(q.yearLow, q.yearHigh)],
+    ["Volume", q.volume ? fmtVol(q.volume) : "—"],
+    ["Exchange", q.exchange || "—"],
+    ["Currency", q.currency || "—"],
     ["Symbol", q.symbol],
   ];
   $("statsGrid").innerHTML = stats
@@ -229,6 +235,13 @@ function renderQuote() {
   const wb = $("watchBtn");
   wb.classList.toggle("watching", watching);
   wb.textContent = watching ? "✓ Watching" : "＋ Watchlist";
+}
+
+function badgeFor(q) {
+  if (q.stale) return `<span class="mkt-badge stale">DELAYED</span>`;
+  if (q.marketState === "OPEN") return `<span class="mkt-badge live">● LIVE</span>`;
+  if (q.marketState === "CLOSED") return `<span class="mkt-badge closed">MARKET CLOSED</span>`;
+  return `<span class="mkt-badge">Yahoo Finance</span>`;
 }
 
 function renderChart() {
@@ -367,20 +380,65 @@ function renderTape() {
   );
 }
 
-// ---- data loading ---------------------------------------------------------
+// ---- connection banner ----------------------------------------------------
+// We never blank the UI on a transient data hiccup: keep the last good render
+// and surface a small banner instead.
+function setConnection(stateName, detail) {
+  const el = $("netBanner");
+  if (!el) return;
+  if (stateName === "live") {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.className = "net-banner " + stateName;
+  el.textContent = detail;
+}
+
+async function loadStatus() {
+  try {
+    const s = await api(`/api/status`);
+    if (s.rateLimited) {
+      setConnection("delayed",
+        `Live data is rate-limited — showing last known prices. Retrying in ~${s.cooldownSeconds || 0}s.`);
+    } else if (state.quote && state.quote.stale) {
+      setConnection("delayed", "Live data delayed — showing last known prices.");
+    } else {
+      setConnection("live");
+    }
+  } catch (_) {
+    setConnection("offline", "Can't reach MarketSim server. Reconnecting…");
+  }
+}
+
+// ---- data loading (each resilient; failures keep the last good render) -----
 async function selectSymbol(symbol) {
   state.symbol = symbol;
   closeSearch();
-  await Promise.all([loadQuote(), loadHistory()]);
+  await Promise.allSettled([loadQuote(), loadHistory()]);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 async function loadQuote() {
-  state.quote = await api(`/api/quote/${state.symbol}`);
-  renderQuote();
+  try {
+    const q = await api(`/api/quote/${state.symbol}`);
+    state.quote = q;
+    renderQuote();
+    if (q.stale) setConnection("delayed", "Live data delayed — showing last known prices.");
+  } catch (e) {
+    // Keep whatever is on screen; only show a placeholder if we have nothing.
+    if (!state.quote || state.quote.symbol !== state.symbol) showQuotePlaceholder(state.symbol);
+    setConnection("delayed", "Live data unavailable for this symbol — retrying…");
+    throw e;
+  }
 }
 async function loadHistory() {
-  state.history = await api(`/api/history/${state.symbol}?range=${state.range}`);
-  renderChart();
+  try {
+    state.history = await api(`/api/history/${state.symbol}?range=${state.range}`);
+    renderChart();
+  } catch (e) {
+    // Leave the previous chart in place rather than clearing it.
+    throw e;
+  }
 }
 async function loadWatchlist() {
   state.watch = await api(`/api/watchlist?account=${ACCOUNT}`);
@@ -402,6 +460,15 @@ async function loadOrders() {
   renderOrders(o);
 }
 
+function showQuotePlaceholder(symbol) {
+  $("qSymbol").textContent = symbol || "—";
+  $("qName").textContent = "Waiting for live data…";
+  $("qSector").textContent = "";
+  $("qPrice").textContent = "—";
+  $("qChange").textContent = "";
+  $("qAsOf").innerHTML = `<span class="mkt-badge stale">CONNECTING</span>`;
+}
+
 // ---- search ---------------------------------------------------------------
 let searchTimer, searchActiveIdx = -1, searchItems = [];
 function openSearchResults(results) {
@@ -416,9 +483,9 @@ function openSearchResults(results) {
     .map(
       (r, i) => `<div class="sr-item" data-i="${i}" data-sym="${r.symbol}">
         <span class="sr-sym">${r.symbol}</span>
-        <span class="sr-name">${r.name}</span>
-        <span class="sr-price">${fmtUSD(r.price)}</span>
-        <span class="sr-pct ${cls(r.changePercent)}">${fmtPct(r.changePercent)}</span>
+        <span class="sr-name">${r.name || ""}</span>
+        <span class="sr-exch">${r.exchange || ""}</span>
+        ${r.tracked ? `<span class="sr-tag">tracked</span>` : ""}
       </div>`
     )
     .join("");
@@ -576,20 +643,26 @@ function bindEvents() {
 }
 
 // ---- live refresh ---------------------------------------------------------
+// Gentle cadence so we don't trip the data source's rate limits. Each task is
+// independent (allSettled) so one failure never blanks the page. Movers and
+// history refresh less often than the headline quote.
+const POLL_MS = 12000;
+let pollTick = 0;
 function startPolling() {
   setInterval(async () => {
-    try {
-      await Promise.all([loadQuote(), loadWatchlist(), loadMovers(), loadPortfolio()]);
-      if (state.range === "1D") await loadHistory();
-    } catch (_) { /* transient */ }
-  }, 4000);
+    pollTick++;
+    const tasks = [loadQuote(), loadWatchlist(), loadPortfolio(), loadStatus()];
+    if (state.range === "1D") tasks.push(loadHistory());
+    if (pollTick % 5 === 0) tasks.push(loadMovers()); // ~once a minute
+    await Promise.allSettled(tasks);
+  }, POLL_MS);
 }
 
 // ---- boot -----------------------------------------------------------------
 async function init() {
   chart = new AreaChart($("chart"), $("chartTip"));
   bindEvents();
-  await Promise.all([loadWatchlist(), loadMovers(), loadPortfolio(), loadOrders()]);
+  await Promise.allSettled([loadWatchlist(), loadMovers(), loadPortfolio(), loadOrders(), loadStatus()]);
   await selectSymbol(state.symbol);
   startPolling();
 }

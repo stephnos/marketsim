@@ -1,3 +1,8 @@
-"""MarketSim - a realistic stock market simulator with a web GUI and an agent CLI."""
+"""MarketSim - a stock market app on live data, with a web GUI and an agent CLI."""
 
-__version__ = "0.1.0"
+from .config import load_dotenv
+
+# Load .env (Alpaca keys, provider selection, etc.) before anything reads env.
+load_dotenv()
+
+__version__ = "0.2.0"
