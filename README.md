@@ -230,6 +230,27 @@ Interactive API docs are available at <http://127.0.0.1:8000/docs>.
 
 ---
 
+## Testing
+
+The test suite runs **fully offline** — a deterministic fake data provider
+stands in for Alpaca/Yahoo, so no network or API keys are needed.
+
+```bash
+pip install -e ".[dev]"   # installs pytest + httpx
+pytest                    # run everything
+```
+
+- `tests/test_cli.py` — CLI argument parsing and endpoint dispatch (HTTP mocked):
+  verifies each subcommand hits the right endpoint, threads `--account` through
+  (defaulting to `default`), supports global flags before or after the
+  subcommand, emits JSON in `--json` mode, and exits non-zero on API errors.
+- `tests/test_api.py` — end-to-end HTTP tests via FastAPI's `TestClient`: the
+  full buy → portfolio → sell → orders → reset flow, **per-account isolation**
+  (the multi-agent guarantee), and error cases (insufficient cash/shares,
+  unknown symbols, invalid orders).
+
+---
+
 ## Project layout
 
 ```
