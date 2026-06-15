@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarketSim — Market Data & Paper Trading</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <!-- Top navigation -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#">
+        <span class="brand-mark"></span>
+        <span class="brand-name">Market<span class="brand-accent">Sim</span></span>
+      </a>
+
+      <div class="search" id="search">
+        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path d="M21 21l-4.3-4.3M11 19a8 8 0 110-16 8 8 0 010 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input id="searchInput" type="text" placeholder="Search ticker or company…" autocomplete="off" spellcheck="false" />
+        <div class="search-results" id="searchResults" hidden></div>
+      </div>
+
+      <div class="topbar-account">
+        <div class="acct-label">Buying Power</div>
+        <div class="acct-cash" id="navCash">$—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Scrolling ticker tape -->
+  <div class="tape" id="tape"><div class="tape-track" id="tapeTrack"></div></div>
+
+  <main class="layout">
+    <!-- Primary column -->
+    <section class="col-main">
+      <article class="quote-card card" id="quoteCard">
+        <div class="quote-head">
+          <div class="quote-id">
+            <h1 class="quote-symbol" id="qSymbol">—</h1>
+            <span class="quote-name" id="qName">Select a ticker</span>
+            <span class="quote-sector" id="qSector"></span>
+          </div>
+          <div class="quote-actions">
+            <button class="btn btn-ghost" id="watchBtn" title="Add to watchlist">＋ Watchlist</button>
+            <button class="btn btn-buy" id="buyBtn">Buy</button>
+            <button class="btn btn-sell" id="sellBtn">Sell</button>
+          </div>
+        </div>
+
+        <div class="quote-price-row">
+          <div class="quote-last" id="qPrice">—</div>
+          <div class="quote-change" id="qChange"></div>
+          <div class="quote-asof" id="qAsOf"></div>
+        </div>
+
+        <div class="range-tabs" id="rangeTabs">
+          <button data-range="1D" class="active">1D</button>
+          <button data-range="1W">1W</button>
+          <button data-range="1M">1M</button>
+          <button data-range="3M">3M</button>
+          <button data-range="6M">6M</button>
+          <button data-range="1Y">1Y</button>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+          <div class="chart-tip" id="chartTip" hidden></div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid"></div>
+      </article>
+
+      <article class="card portfolio-card">
+        <div class="card-head">
+          <h2>Portfolio</h2>
+          <button class="btn btn-ghost btn-sm" id="resetBtn" title="Reset paper account">Reset</button>
+        </div>
+        <div class="port-summary" id="portSummary"></div>
+        <div class="table-wrap">
+          <table class="data-table" id="positionsTable">
+            <thead>
+              <tr><th>Symbol</th><th class="num">Qty</th><th class="num">Avg Cost</th><th class="num">Price</th><th class="num">Mkt Value</th><th class="num">Unrealized P/L</th></tr>
+            </thead>
+            <tbody id="positionsBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card orders-card">
+        <div class="card-head"><h2>Order History</h2></div>
+        <div class="table-wrap">
+          <table class="data-table" id="ordersTable">
+            <thead>
+              <tr><th>Time</th><th>Side</th><th>Symbol</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Notional</th></tr>
+            </thead>
+            <tbody id="ordersBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- Sidebar -->
+    <aside class="col-side">
+      <article class="card">
+        <div class="card-head"><h2>Watchlist</h2></div>
+        <div class="watchlist" id="watchlist"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head"><h2>Movers</h2></div>
+        <div class="movers-tabs" id="moversTabs">
+          <button data-mv="gainers" class="active">Gainers</button>
+          <button data-mv="losers">Losers</button>
+          <button data-mv="actives">Most Active</button>
+        </div>
+        <div class="movers-list" id="moversList"></div>
+      </article>
+
+      <article class="card hint-card">
+        <div class="card-head"><h2>Agent CLI</h2></div>
+        <p class="hint">AI agents can trade this same market from a terminal:</p>
+        <pre class="codeblock">marketsim quote AAPL
+marketsim buy AAPL 10
+marketsim portfolio --json</pre>
+      </article>
+    </aside>
+  </main>
+
+  <!-- Trade dialog -->
+  <div class="modal-backdrop" id="tradeModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3 id="tradeTitle">Buy</h3>
+        <button class="modal-close" id="tradeClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="trade-symbol">
+          <span id="tradeSymbol">—</span>
+          <span class="trade-price" id="tradePrice">$—</span>
+        </div>
+        <label class="field">
+          <span>Shares</span>
+          <input type="number" id="tradeQty" min="0" step="1" value="1" />
+        </label>
+        <div class="trade-estimate">
+          <span>Estimated total</span>
+          <strong id="tradeTotal">$0.00</strong>
+        </div>
+        <div class="trade-error" id="tradeError" hidden></div>
+        <button class="btn btn-block" id="tradeSubmit">Place Order</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
