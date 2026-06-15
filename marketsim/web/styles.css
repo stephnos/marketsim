@@ -162,6 +162,7 @@ h1, h2, h3 { margin: 0; }
 .quote-price-row { display: flex; align-items: baseline; gap: 14px; margin: 16px 0 6px; flex-wrap: wrap; }
 .quote-last { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
 .quote-change { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.quote-change-range { color: var(--ink-faint); font-size: 12.5px; font-weight: 500; margin-left: 7px; }
 .quote-asof { color: var(--ink-faint); font-size: 12.5px; margin-left: auto; }
 
 .up { color: var(--up); }

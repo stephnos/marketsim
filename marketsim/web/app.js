@@ -209,9 +209,7 @@ function renderQuote() {
   $("qName").textContent = q.name || "";
   $("qSector").textContent = q.sector || q.exchange || "";
   $("qPrice").textContent = fmtUSD(q.price);
-  const c = $("qChange");
-  c.className = "quote-change " + cls(q.change);
-  c.textContent = `${fmtSigned(q.change)} (${fmtPct(q.changePercent)})`;
+  renderQuoteChange();
 
   const badge = badgeFor(q);
   $("qAsOf").innerHTML = badge;
@@ -237,6 +235,24 @@ function renderQuote() {
   wb.textContent = watching ? "✓ Watching" : "＋ Watchlist";
 }
 
+// The headline change tracks the selected timeframe. On 1D we keep the day's
+// move vs previous close (Apple Stocks behaviour); other ranges show the move
+// across the whole window, taken from the loaded history payload.
+const RANGE_LABEL = { "1D": "Today", "1W": "Past week", "1M": "Past month",
+  "3M": "Past 3 months", "6M": "Past 6 months", "1Y": "Past year" };
+function renderQuoteChange() {
+  const q = state.quote;
+  if (!q) return;
+  const c = $("qChange");
+  const h = state.history;
+  const useWindow = state.range !== "1D" && h && typeof h.changePercent === "number";
+  const change = useWindow ? h.change : q.change;
+  const pct = useWindow ? h.changePercent : q.changePercent;
+  c.className = "quote-change " + cls(change);
+  c.innerHTML = `${fmtSigned(change)} (${fmtPct(pct)})` +
+    `<span class="quote-change-range">${RANGE_LABEL[state.range] || state.range}</span>`;
+}
+
 function badgeFor(q) {
   if (q.stale) return `<span class="mkt-badge stale">DELAYED</span>`;
   if (q.marketState === "OPEN") return `<span class="mkt-badge live">● LIVE</span>`;
@@ -253,6 +269,7 @@ function renderChart() {
   chart.baseline = intraday ? state.quote.prevClose : h.points[0]?.c;
   const up = intraday ? state.quote.change >= 0 : h.changePercent >= 0;
   chart.setData(h.points, up);
+  renderQuoteChange();
 }
 
 function renderWatchlist() {
